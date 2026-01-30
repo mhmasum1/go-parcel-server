@@ -9,6 +9,16 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET);
 
 const port = process.env.PORT || 3000;
 
+const crypto = require("crypto");
+
+function generateTrackingId() {
+    const prefix = "PRC"; // your brand prefix
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const random = crypto.randomBytes(3).toString("hex").toUpperCase();
+
+    return `${prefix}-${date}-${random}`;
+}
+
 // middleware 
 app.use(express.json())
 app.use(cors());
@@ -111,6 +121,7 @@ async function run() {
 
             const session = await stripe.checkout.sessions.retrieve(sessionId);
             console.log('session retrieve ', session)
+            const trackingId = generateTrackingId()
 
             if (session.payment_status === 'paid') {
                 const id = session.metadata.parcelId;
@@ -118,6 +129,7 @@ async function run() {
                 const update = {
                     $set: {
                         paymentStatus: 'paid',
+                        trackingId: trackingId
                     }
                 }
                 const result = await parcelsCollection.updateOne(query, update);
@@ -128,15 +140,20 @@ async function run() {
                     customerEmail: session.customer_email,
                     parcelId: session.metadata.parcelId,
                     parcelName: session.metadata.parcelName,
+                    transtionId: session.payment_intent,
                     paymentStatus: session.payment_status,
-                    paidAt: new Date(),
-                    trackingId: ' '
-
+                    paidAt: new Date()
                 }
 
                 if (session.payment_status === "paid") {
                     const resultPayment = await paymentCollection.insertOne(payment)
-                    res.send({ success: true, modifyParcel: result, paymentInfo: resultPayment })
+                    res.send({
+                        success: true,
+                        modifyParcel: result,
+                        trackingId: trackingId,
+                        transactionId: session.payment_intent,
+                        paymentInfo: resultPayment
+                    })
                 }
             }
             res.send({ success: false })
