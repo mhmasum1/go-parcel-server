@@ -4,6 +4,9 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express()
 require('dotenv').config()
 
+const stripe = require('stripe')(process.env.STRIPE_SECRET);
+
+
 const port = process.env.PORT || 3000;
 
 // middleware 
@@ -70,6 +73,37 @@ async function run() {
         })
 
 
+        // Payment Related Apis 
+
+        app.post('/create-checkout-session', async (req, res) => {
+            const paymentInfo = req.body;
+            const amout = parseInt(paymentInfo.cost) * 100;
+
+            const session = await stripe.checkout.sessions.create({
+                line_items: [
+                    {
+                        price_data: {
+                            currency: "USD",
+                            unit_amount: amout,
+                            product_data: {
+                                name: paymentInfo.parcelName
+                            },
+                        },
+                        quantity: 1,
+                    },
+                ],
+                customer_email: paymentInfo.senderEmail,
+                mode: 'payment',
+                metadata: {
+                    parcelId: paymentInfo.parcelId
+                },
+                success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success`,
+                cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
+            });
+
+            console.log(session)
+            res.send({ url: session.url })
+        });
 
 
 
