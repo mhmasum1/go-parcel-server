@@ -32,6 +32,7 @@ async function run() {
 
         const db = client.db("go_parcel_db");
         const parcelsCollection = db.collection("parcels");
+        const paymentCollection = db.collection("payments");
 
 
 
@@ -95,7 +96,8 @@ async function run() {
                 customer_email: paymentInfo.senderEmail,
                 mode: 'payment',
                 metadata: {
-                    parcelId: paymentInfo.parcelId
+                    parcelId: paymentInfo.parcelId,
+                    parcelName: paymentInfo.parcelName
                 },
                 success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
                 cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
@@ -119,9 +121,24 @@ async function run() {
                     }
                 }
                 const result = await parcelsCollection.updateOne(query, update);
-                res.send(result)
-            }
 
+                const payment = {
+                    amout: session.amout_total / 100,
+                    currency: session.currency,
+                    customerEmail: session.customer_email,
+                    parcelId: session.metadata.parcelId,
+                    parcelName: session.metadata.parcelName,
+                    paymentStatus: session.payment_status,
+                    paidAt: new Date(),
+                    trackingId: ' '
+
+                }
+
+                if (session.payment_status === "paid") {
+                    const resultPayment = await paymentCollection.insertOne(payment)
+                    res.send({ success: true, modifyParcel: result, paymentInfo: resultPayment })
+                }
+            }
             res.send({ success: false })
         })
 
